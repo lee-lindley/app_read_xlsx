@@ -1,5 +1,6 @@
 whenever sqlerror continue
-TRUNCATE TABLE as_read_xlsx_gtt; -- may be necessary to drop it
+-- may be necessary in order to drop it
+TRUNCATE TABLE as_read_xlsx_gtt; 
 DROP TABLE as_read_xlsx_gtt;
 prompt ok for trunc and drop to fail for table does not exist
 whenever sqlerror exit failure
