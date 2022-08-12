@@ -1,6 +1,7 @@
 whenever sqlerror continue
+TRUNCATE TABLE as_read_xlsx_gtt; -- may be necessary to drop it
 DROP TABLE as_read_xlsx_gtt;
-prompt ok for drop to fail for table does not exist
+prompt ok for trunc and drop to fail for table does not exist
 whenever sqlerror exit failure
 CREATE GLOBAL TEMPORARY TABLE as_read_xlsx_gtt(
     -- these must match type tp_one_cell in package as_read_xlsx

@@ -20,8 +20,9 @@ AS
     BEGIN
         EXECUTE IMMEDIATE 'DELETE FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt';
         EXECUTE IMMEDIATE 'INSERT INTO '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
-        SELECT * 
-        FROM TABLE( AS_READ_XLSX.read(p_xlsx, p_sheets, p_cell) )'
+            SELECT * 
+            FROM TABLE( '||$$PLSQL_UNIT_OWNER||'.AS_READ_XLSX.read(:p_xlsx, :p_sheets, :p_cell) )'
+            USING p_xlsx, p_sheets, p_cell
         ;
         EXECUTE IMMEDIATE 'SELECT COUNT(*) 
         FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
@@ -37,10 +38,10 @@ AS
         EXCEPTION WHEN OTHERS THEN NULL;
         END;
 
-        v_tbl_sql := 'CREATE PRIVATE TEMPORARY TABLE '||p_ptt_name||'(
+        v_tbl_sql := 'CREATE PRIVATE TEMPORARY TABLE '||user||'.'||p_ptt_name||'(
 row_nr      NUMBER(10)';
 
-        v_sql := 'INSERT /*+ APPEND */ INTO '||p_ptt_name||'
+        v_sql := 'INSERT /*+ APPEND */ INTO '||user||'.'||p_ptt_name||'
 WITH a AS (
     SELECT row_nr, col_nr, cell_type, string_val, number_val, date_val
     FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
@@ -55,12 +56,12 @@ WITH a AS (
         ;
         FOR i IN 1..v_arr_colname.COUNT
         LOOP
-            v_tbl_sql := v_tbl_sql||v_comma||'"'||v_arr_colname(i).string_val||'" SYS.ANYDATA';
+            v_tbl_sql := v_tbl_sql||v_comma||'"'||v_arr_colname(i).string_val||'" VARCHAR2(4000)';
             v_sql := v_sql||v_comma||'MAX(CASE WHEN col_nr = '||TO_CHAR(v_arr_colname(i).col_nr)||q'! THEN
     CASE cell_type
-        WHEN 'S' THEN SYS.ANYDATA.convertVarchar2(string_val)
-        WHEN 'D' THEN SYS.ANYDATA.convertDate(date_val)
-        WHEN 'N' THEN SYS.ANYDATA.convertNumber(number_val)
+        WHEN 'S' THEN string_val
+        WHEN 'D' THEN TO_CHAR(date_val)
+        WHEN 'N' THEN TO_CHAR(number_val)
     END
 END) AS "!'||v_arr_colname(i).string_val||'"';
         END LOOP;
