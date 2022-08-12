@@ -4,49 +4,51 @@ AS
         p_xlsx      BLOB
         ,p_sheets   VARCHAR2 := NULL
         ,p_cell     VARCHAR2 := NULL
-        ,p_ptt_name VARCHAR2 := 'XLSX_PTT'
+        ,p_ptt_name VARCHAR2 := 'ora$ptt_XLSX' -- must start with ora$ptt unless changed by dba
     ) IS
+        v_src       SYS_REFCURSOR;
         v_cnt       BINARY_INTEGER;
         v_tbl_sql   CLOB;
         v_sql       CLOB;
         v_comma     VARCHAR2(2) := '
 ,';
     BEGIN
-        DELETE FROM as_read_xlsx_gtt;
-        INSERT INTO as_read_xlsx_gtt
+        EXECUTE IMMEDIATE 'DELETE FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt';
+        EXECUTE IMMEDIATE 'INSERT INTO '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
         SELECT * 
-        FROM TABLE( AS_READ_XLSX.read(p_xlsx, p_sheets, p_cell) )
+        FROM TABLE( AS_READ_XLSX.read(p_xlsx, p_sheets, p_cell) )'
         ;
-        SELECT COUNT(*) INTO v_cnt
-        FROM as_read_xlsx_gtt
-        WHERE row_nr = 1
+        EXECUTE IMMEDIATE 'SELECT COUNT(*) 
+        FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
+        WHERE row_nr = 1' INTO v_cnt
         ;
         IF v_cnt = 0 THEN
             raise_application_error(-20222, 'app_read_xlsx.xlsx_to_ptt found no data in input blob for sheets='||NVL(p_sheets,'NULL')||', cell='||NVL(p_cell,'NULL'));
         END IF;
 
-        v_sql := 'DROP TABLE ora$ptt_csv';
+        v_sql := 'DROP TABLE '||p_ptt_name;
         BEGIN
             EXECUTE IMMEDIATE v_sql;
         EXCEPTION WHEN OTHERS THEN NULL;
         END;
 
-        v_tbl_sql := 'CREATE PRIVATE TEMPORARY TABLE ora$ptt_xlsx(
+        v_tbl_sql := 'CREATE PRIVATE TEMPORARY TABLE '||p_ptt_name||'(
 row_nr      NUMBER(10)';
 
-        v_sql := 'INSERT /*+ APPEND */ INTO ora$ptt_xlsx
+        v_sql := 'INSERT /*+ APPEND */ INTO '||p_ptt_name||'
 WITH a AS (
     SELECT row_nr, col_nr, cell_type, string_val, number_val, date_val
-    FROM as_read_xlsx_gtt
+    FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
     WHERE row_nr > 1 AND col_nr <= '||TO_CHAR(v_cnt)||'
 ) SELECT row_nr';
 
-        FOR r IN (
-            SELECT string_val, col_nr
-            FROM as_read_xlsx_gtt
+        OPEN v_src FOR 'SELECT string_val, col_nr
+            FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
             WHERE row_nr = 1
-            ORDER BY col_nr
-        ) LOOP
+            ORDER BY col_nr'
+        ;
+        FOR r IN v_src
+        LOOP
             v_tbl_sql := v_tbl_sql||v_comma||'"'||r.string_val||'" SYS.ANYDATA';
             v_sql := v_sql||v_comma||'MAX(CASE WHEN col_nr = '||TO_CHAR(r.col_nr)||q'! THEN
     CASE cell_type
