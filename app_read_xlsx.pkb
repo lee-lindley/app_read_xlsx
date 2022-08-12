@@ -43,6 +43,11 @@ AS
         -- prepare to create a private temporary table. An oddity is that if user session changed current_schema,
         -- creating an unqualifed name PTT doesn't work. Weird bug since the darn thing only exists in session memory.
         -- This safely creates it in the session user schema no matter how we are called.
+        v_sql := 'TRUNCATE TABLE '||user||'.'||p_ptt_name;
+        BEGIN
+            EXECUTE IMMEDIATE v_sql;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
         v_sql := 'DROP TABLE '||user||'.'||p_ptt_name;
         BEGIN
             EXECUTE IMMEDIATE v_sql;
@@ -53,7 +58,7 @@ AS
         v_tbl_sql := 'CREATE PRIVATE TEMPORARY TABLE '||user||'.'||p_ptt_name||'(
 data_row_nr      NUMBER(10)';
 
-        v_sql := 'INSERT /*+ APPEND */ INTO '||user||'.'||p_ptt_name||'
+        v_sql := 'INSERT INTO '||user||'.'||p_ptt_name||'
 WITH a AS (
     SELECT row_nr, col_nr, cell_type, string_val, number_val, date_val
     FROM '||$$PLSQL_UNIT_OWNER||'.as_read_xlsx_gtt
