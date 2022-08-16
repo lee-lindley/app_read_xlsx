@@ -29,6 +29,21 @@ AS
         RETURN;
     END app_read_xlsx_udt
     ;
+    CONSTRUCTOR FUNCTION app_read_xlsx_udt(
+        p_ctx       NUMBER
+    ) RETURN SELF AS RESULT
+    IS
+    BEGIN
+        ctx := p_ctx;
+        SELECT string_val BULK COLLECT INTO col_names
+        FROM as_read_xlsx_gtt t
+        WHERE t.ctx = p_ctx AND t.row_nr = 1
+        ORDER BY col_nr
+        ;
+        RETURN;
+    END app_read_xlsx_udt
+    ;
+
 
     MEMBER FUNCTION get_col_names RETURN &&d_arr_varchar2_udt.
     IS
@@ -81,7 +96,7 @@ WITH app_read_xlsx_cols AS (
         ,app_read_xlsx_row_udt(arr_ad) AS ad
     FROM app_read_xlsx_c c
 ), app_read_xlsx_sql AS ( 
-  SELECT
+  SELECT R.data_row_nr, 
 }'|| SELF.get_col_sql||q'{
   FROM app_read_xlsx_d R
 )}';

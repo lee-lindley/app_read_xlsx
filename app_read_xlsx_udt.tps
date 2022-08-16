@@ -19,6 +19,9 @@ CREATE OR REPLACE TYPE app_read_xlsx_udt FORCE AS OBJECT (
         ,p_sheets   VARCHAR2 := NULL
         ,p_cell     VARCHAR2 := NULL
     ) RETURN SELF AS RESULT
+    ,CONSTRUCTOR FUNCTION app_read_xlsx_udt(
+        p_ctx   NUMBER
+    ) RETURN SELF AS RESULT
     ,MEMBER PROCEDURE destructor -- clears context and global temporary table records for this spreadsheet
     ,MEMBER FUNCTION get_col_names RETURN &&d_arr_varchar2_udt.
     ,MEMBER FUNCTION get_col_count RETURN NUMBER
