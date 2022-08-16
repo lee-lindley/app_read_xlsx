@@ -83,7 +83,7 @@ AS
     SELECT
         t.data_row_nr
         ,cols.c AS col_nr
-        ,anydata_shell_udt(
+        ,}'||$$PLSQL_UNIT_OWNER||q'{.anydata_shell_udt(
             CASE t.cell_type
                 WHEN 'S' THEN SYS.ANYDATA.convertVarchar2(t.string_val)
                 WHEN 'D' THEN SYS.ANYDATA.convertDate(t.date_val)
@@ -95,12 +95,12 @@ AS
     RIGHT OUTER JOIN app_read_xlsx_cols cols 
         ON cols.c = t.col_nr
 ), app_read_xlsx_c AS (
-    SELECT data_row_nr, CAST( COLLECT(ad ORDER BY col_nr) AS arr_anydata_shell_udt) AS arr_ad
+    SELECT data_row_nr, CAST( COLLECT(ad ORDER BY col_nr) AS }'||$$PLSQL_UNIT_OWNER||q'{.arr_anydata_shell_udt) AS arr_ad
     FROM app_read_xlsx_b b
     GROUP BY data_row_nr
 ), app_read_xlsx_d AS (
     SELECT data_row_nr
-        ,app_read_xlsx_row_udt(arr_ad) AS ad
+        ,}'||$$PLSQL_UNIT_OWNER||q'{.app_read_xlsx_row_udt(arr_ad) AS ad
     FROM app_read_xlsx_c c
 ), app_read_xlsx_sql AS ( 
   SELECT R.data_row_nr, 
