@@ -96,10 +96,10 @@ WITH app_read_xlsx_cols AS (
         v_comma CONSTANT VARCHAR2(8) := '
     ,';
     BEGIN
-        v_sql := '   '||p_oname||'.ad.get(1) AS '||col_names(1);
+        v_sql := '   '||p_oname||'.ad.get(1) AS "'||col_names(1)||'"';
         FOR i IN 2..col_names.COUNT
         LOOP
-            v_sql := v_sql||v_comma||p_oname||'.ad.get('||TO_CHAR(i)||') AS '||col_names(i);
+            v_sql := v_sql||v_comma||p_oname||'.ad.get('||TO_CHAR(i)||') AS "'||col_names(i)||'"';
         END LOOP;
         RETURN v_sql;
     END get_col_sql
