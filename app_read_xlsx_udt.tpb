@@ -73,12 +73,11 @@ AS
         v_col_count     NUMBER := SELF.get_col_count();
         v_sql           CLOB;
     BEGIN
-        v_sql := q'{
-WITH app_read_xlsx_cols AS (
+        v_sql := q'{WITH app_read_xlsx_cols AS (
     SELECT level AS c FROM dual CONNECT BY level <= }'||TO_CHAR(v_col_count)||q'{
 ), app_read_xlsx_t AS (
     SELECT row_nr - 1 AS data_row_nr, col_nr, cell_type, string_val, date_val, number_val
-    FROM as_read_xlsx_gtt t
+    FROM }'||$$PLSQL_UNIT_OWNER||q'{.as_read_xlsx_gtt t
     WHERE t.ctx = }'||TO_CHAR(SELF.ctx)||q'{ AND t.row_nr > 1 AND t.col_nr <= }'||TO_CHAR(v_col_count)||q'{
 ), app_read_xlsx_b AS (
     SELECT
