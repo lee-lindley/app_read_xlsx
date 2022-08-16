@@ -25,6 +25,10 @@ AS
         WHERE t.ctx = SELF.ctx AND t.row_nr = 1
         ORDER BY col_nr
         ;
+        SELECT sheet_name INTO SELF.sheet_name
+        FROM as_read_xlsx_gtt t
+        WHERE t.ctx = SELF.ctx AND ROWNUM = 1
+        ;
 
         RETURN;
     END app_read_xlsx_udt
@@ -39,6 +43,10 @@ AS
         FROM as_read_xlsx_gtt t
         WHERE t.ctx = p_ctx AND t.row_nr = 1
         ORDER BY col_nr
+        ;
+        SELECT sheet_name INTO SELF.sheet_name
+        FROM as_read_xlsx_gtt t
+        WHERE t.ctx = SELF.ctx AND ROWNUM = 1
         ;
         RETURN;
     END app_read_xlsx_udt

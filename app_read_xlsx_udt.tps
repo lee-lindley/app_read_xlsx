@@ -13,6 +13,7 @@ CREATE OR REPLACE TYPE app_read_xlsx_udt FORCE AS OBJECT (
     -- end;
     -- 
     ctx         NUMBER(10)
+    ,sheet_name VARCHAR2(128)
     ,col_names  &&d_arr_varchar2_udt.
     ,CONSTRUCTOR FUNCTION app_read_xlsx_udt(
         p_xlsx      BLOB
