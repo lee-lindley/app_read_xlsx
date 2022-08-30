@@ -26,6 +26,7 @@ CREATE OR REPLACE TYPE app_read_xlsx_udt FORCE AS OBJECT (
     ,MEMBER PROCEDURE destructor -- clears context and global temporary table records for this spreadsheet
     ,MEMBER FUNCTION get_col_names RETURN &&d_arr_varchar2_udt.
     ,MEMBER FUNCTION get_col_count RETURN NUMBER
+    ,MEMBER FUNCTION get_app_read_xlsx_d_sql RETURN CLOB
     ,MEMBER FUNCTION get_sql RETURN CLOB
     ,MEMBER FUNCTION get_col_sql(p_oname VARCHAR2 := 'R') RETURN CLOB
 

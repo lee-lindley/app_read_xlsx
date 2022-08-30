@@ -67,7 +67,22 @@ AS
     END get_col_count
     ;
 
-    MEMBER FUNCTION get_sql 
+    MEMBER FUNCTION get_sql
+    RETURN CLOB
+    IS
+        v_col_count     NUMBER  := SELF.get_col_count();
+        v_sql           CLOB    := SELF.get_app_read_xlsx_d_sql();
+    BEGIN
+        v_sql := v_sql||q'{, app_read_xlsx_sql AS ( 
+  SELECT R.data_row_nr, 
+}'|| SELF.get_col_sql||q'{
+  FROM app_read_xlsx_d R
+)}';
+        RETURN v_sql;
+    END get_sql
+    ;
+
+    MEMBER FUNCTION get_app_read_xlsx_d_sql
     RETURN CLOB
     IS
         v_col_count     NUMBER := SELF.get_col_count();
@@ -102,13 +117,10 @@ AS
     SELECT data_row_nr
         ,}'||$$PLSQL_UNIT_OWNER||q'{.app_read_xlsx_row_udt(arr_ad) AS ad
     FROM app_read_xlsx_c c
-), app_read_xlsx_sql AS ( 
-  SELECT R.data_row_nr, 
-}'|| SELF.get_col_sql||q'{
-  FROM app_read_xlsx_d R
 )}';
+
         RETURN v_sql;
-    END get_sql
+    END get_app_read_xlsx_d_sql
     ;
 
     MEMBER FUNCTION get_col_sql(p_oname VARCHAR2 := 'R')
