@@ -16,9 +16,9 @@ AS
     PROCEDURE close_ctx(p_ctx NUMBER)
     IS
     BEGIN
-        g_ctx_cache(p_ctx) := 0; -- mark it as closed even though we do not currently care
         DELETE FROM as_read_xlsx_gtt WHERE ctx = p_ctx;
-        COMMIT;
+        COMMIT; -- required for autonomous_transaction
+        g_ctx_cache.DELETE(p_ctx);
     END close_ctx;
 
     PROCEDURE parse_blob(
@@ -34,14 +34,15 @@ AS
         INSERT INTO as_read_xlsx_gtt(
                 ctx, sheet_nr, sheet_name, row_nr, col_nr, cell, cell_type, string_val, number_val, date_val, formula
             )
-            SELECT p_ctx, 
+        SELECT p_ctx, 
                 sheet_nr, sheet_name, row_nr, col_nr, cell, cell_type, string_val, number_val, date_val, formula
-            FROM TABLE( AS_READ_XLSX.read(p_xlsx, p_sheets, p_cell) ) t
+        FROM TABLE( AS_READ_XLSX.read(p_xlsx, p_sheets, p_cell) ) t
         ;
         COMMIT; -- required for autonomous_transaction
         
 
     END parse_blob;
+
 
     
 END app_read_xlsx_pkg

@@ -1,26 +1,39 @@
 CREATE OR REPLACE TYPE BODY app_read_xlsx_udt
 AS
-    MEMBER PROCEDURE destructor -- clears context and global temporary table records for this spreadsheet
+
+    -- clears context and global temporary table records for this spreadsheet.
+    -- You generally don't need to worry about it. If you are running multiple times
+    -- in a session for one or more spreadsheet inputs, the global temporary table can
+    -- fill up with data. Again, probably doesn't matter, but this gives you a way
+    -- to clean up.
+    MEMBER PROCEDURE destructor 
     IS
     BEGIN
         app_read_xlsx_pkg.close_ctx(ctx);
     END destructor
     ;
-    CONSTRUCTOR FUNCTION app_read_xlsx_udt(
-        p_xlsx      BLOB
-        ,p_sheets   VARCHAR2 := NULL
-        ,p_cell     VARCHAR2 := NULL
-    ) RETURN SELF AS RESULT
-    IS
+    -- for internal uses. Called from constructor functions
+    MEMBER PROCEDURE app_read_xlsx_constructor(
+        -- internal use
+        SELF IN OUT NOCOPY  app_read_xlsx_udt
+        ,p_xlsx             BLOB DEFAULT NULL
+        ,p_sheets           VARCHAR2 := NULL
+        ,p_cell             VARCHAR2 := NULL
+        ,p_ctx              NUMBER := NULL
+    ) IS
     BEGIN
-        ctx := app_read_xlsx_pkg.create_ctx;
-        app_read_xlsx_pkg.parse_blob(
-            p_ctx   => ctx
-            ,p_xlsx => p_xlsx
-            ,p_sheets   => p_sheets
-            ,p_cell     => p_cell
-        );
-        SELECT string_val BULK COLLECT INTO col_names
+        IF p_ctx IS NULL THEN
+            SELF.ctx := app_read_xlsx_pkg.create_ctx;
+            app_read_xlsx_pkg.parse_blob(
+                p_ctx       => SELF.ctx
+                ,p_xlsx     => p_xlsx
+                ,p_sheets   => p_sheets
+                ,p_cell     => p_cell
+            );
+        ELSE
+            SELF.ctx := p_ctx;
+        END IF;
+        SELECT string_val BULK COLLECT INTO SELF.col_names
         FROM as_read_xlsx_gtt t
         WHERE t.ctx = SELF.ctx AND t.row_nr = 1
         ORDER BY col_nr
@@ -29,7 +42,20 @@ AS
         FROM as_read_xlsx_gtt t
         WHERE t.ctx = SELF.ctx AND ROWNUM = 1
         ;
-
+    END app_read_xlsx_constructor
+    ;
+    CONSTRUCTOR FUNCTION app_read_xlsx_udt(
+        p_xlsx      BLOB
+        ,p_sheets   VARCHAR2 := NULL
+        ,p_cell     VARCHAR2 := NULL
+    ) RETURN SELF AS RESULT
+    IS
+    BEGIN
+        SELF.app_read_xlsx_constructor(
+            p_xlsx      => p_xlsx
+            ,p_sheets   => p_sheets
+            ,p_cell     => p_cell
+        );
         RETURN;
     END app_read_xlsx_udt
     ;
@@ -38,16 +64,9 @@ AS
     ) RETURN SELF AS RESULT
     IS
     BEGIN
-        ctx := p_ctx;
-        SELECT string_val BULK COLLECT INTO col_names
-        FROM as_read_xlsx_gtt t
-        WHERE t.ctx = p_ctx AND t.row_nr = 1
-        ORDER BY col_nr
-        ;
-        SELECT sheet_name INTO SELF.sheet_name
-        FROM as_read_xlsx_gtt t
-        WHERE t.ctx = SELF.ctx AND ROWNUM = 1
-        ;
+        SELF.app_read_xlsx_constructor(
+            p_ctx       => p_ctx
+        );
         RETURN;
     END app_read_xlsx_udt
     ;
@@ -67,78 +86,122 @@ AS
     END get_col_count
     ;
 
-    MEMBER FUNCTION get_sql
+    MEMBER FUNCTION get_ctx RETURN NUMBER
+    IS
+    BEGIN
+        RETURN ctx;
+    END get_ctx
+    ;
+
+    -- you can use this in a dynamic sql statement. It can become a WITH clause
+    -- that you join to as needed. 
+    --
+    -- The query this outputs gives you 
+    -- a column named data_row_nr with the line number in the input spreadsheet
+    -- starting at 1 for the line after the column headers 
+    -- (so row 2 becomes data_row_nr=1).
+    --
+    -- The rest of the columns are named as the column headers in the input
+    -- spreadsheet with case preserved. Newlines in headers will likely blow it up.
+    --
+    MEMBER FUNCTION get_sql(
+        p_oname VARCHAR2 := 'X.R'
+    )
     RETURN CLOB
     IS
-        v_col_count     NUMBER  := SELF.get_col_count();
-        v_sql           CLOB    := SELF.get_app_read_xlsx_d_sql();
+        v_sql           CLOB ;
     BEGIN
-        v_sql := v_sql||q'{, app_read_xlsx_sql AS ( 
-  SELECT R.data_row_nr, 
-}'|| SELF.get_col_sql||q'{
-  FROM app_read_xlsx_d R
-)}';
+        -- since this is dynamic sql that will be executed by a procedure
+        -- that can be in another schema, and we have not created synonyms,
+        -- fully qualify the name of the function
+        v_sql := 'SELECT '||p_oname||'.data_row_nr AS data_row_nr, 
+'
+            || SELF.get_col_sql(p_oname)||'
+  FROM (
+    SELECT VALUE(t) AS R
+    FROM TABLE('||$$PLSQL_UNIT_OWNER||'.app_read_xlsx_udt.get_data_rows('
+            ||TO_CHAR(SELF.ctx)
+            ||','||TO_CHAR(SELF.get_col_count)
+            || ')) t
+  ) X';
+DBMS_OUTPUT.put_line(v_sql);
         RETURN v_sql;
     END get_sql
     ;
 
-    MEMBER FUNCTION get_app_read_xlsx_d_sql
-    RETURN CLOB
-    IS
-        v_col_count     NUMBER := SELF.get_col_count();
-        v_sql           CLOB;
-    BEGIN
-        v_sql := q'{WITH app_read_xlsx_cols AS (
-    SELECT level AS c FROM dual CONNECT BY level <= }'||TO_CHAR(v_col_count)||q'{
-), app_read_xlsx_t AS (
-    SELECT row_nr - 1 AS data_row_nr, col_nr, cell_type, string_val, date_val, number_val
-    FROM }'||$$PLSQL_UNIT_OWNER||q'{.as_read_xlsx_gtt t
-    WHERE t.ctx = }'||TO_CHAR(SELF.ctx)||q'{ AND t.row_nr > 1 AND t.col_nr <= }'||TO_CHAR(v_col_count)||q'{
-), app_read_xlsx_b AS (
-    SELECT
-        t.data_row_nr
-        ,cols.c AS col_nr
-        ,}'||$$PLSQL_UNIT_OWNER||q'{.anydata_shell_udt(
-            CASE t.cell_type
-                WHEN 'S' THEN SYS.ANYDATA.convertVarchar2(t.string_val)
-                WHEN 'D' THEN SYS.ANYDATA.convertDate(t.date_val)
-                WHEN 'N' THEN SYS.ANYDATA.convertNumber(t.number_val)
-            END 
-        ) AS ad
-    FROM app_read_xlsx_t t
-    PARTITION BY (t.data_row_nr)    -- fill in gaps for empty cells
-    RIGHT OUTER JOIN app_read_xlsx_cols cols 
-        ON cols.c = t.col_nr
-), app_read_xlsx_c AS (
-    SELECT data_row_nr, CAST( COLLECT(ad ORDER BY col_nr) AS }'||$$PLSQL_UNIT_OWNER||q'{.arr_anydata_shell_udt) AS arr_ad
-    FROM app_read_xlsx_b b
-    GROUP BY data_row_nr
-), app_read_xlsx_d AS (
-    SELECT data_row_nr
-        ,}'||$$PLSQL_UNIT_OWNER||q'{.app_read_xlsx_row_udt(arr_ad) AS ad
-    FROM app_read_xlsx_c c
-)}';
 
-        RETURN v_sql;
-    END get_app_read_xlsx_d_sql
-    ;
-
-    MEMBER FUNCTION get_col_sql(p_oname VARCHAR2 := 'R')
+    MEMBER FUNCTION get_col_sql(p_oname VARCHAR2 := 'X.R')
     RETURN CLOB
     IS
         v_sql   CLOB;
         v_comma CONSTANT VARCHAR2(8) := '
     ,';
     BEGIN
-        v_sql := '   '||p_oname||'.ad.get(1) AS "'||col_names(1)||'"';
+        v_sql := '   '||p_oname||'.get(1) AS "'||col_names(1)||'"';
         FOR i IN 2..col_names.COUNT
         LOOP
-            v_sql := v_sql||v_comma||p_oname||'.ad.get('||TO_CHAR(i)||') AS "'||col_names(i)||'"';
+            v_sql := v_sql||v_comma||p_oname||'.get('||TO_CHAR(i)||') AS "'||col_names(i)||'"';
         END LOOP;
         RETURN v_sql;
     END get_col_sql
     ;
 
+    -- called for you in the SQL provided by get_sql
+    STATIC FUNCTION get_data_rows(
+         p_ctx      NUMBER
+        ,p_col_cnt  NUMBER
+    )
+    RETURN arr_app_read_xlsx_row_udt PIPELINED
+    IS
+        v_arr       arr_app_read_xlsx_row_udt;
+
+        CURSOR c_filled_gaps IS
+WITH cols AS (
+    SELECT level AS col_nr FROM dual CONNECT BY level <= p_col_cnt
+)
+, this_ctx_cols AS (
+    SELECT row_nr, col_nr, cell_type, string_val, date_val, number_val
+    FROM as_read_xlsx_gtt
+    WHERE ctx = p_ctx AND row_nr > 1 AND col_nr <= p_col_cnt
+)
+, ad_cols AS (
+    SELECT t.row_nr, cols.col_nr
+        ,CASE t.cell_type
+            WHEN 'S' THEN SYS.ANYDATA.convertVarchar2(t.string_val)
+            WHEN 'D' THEN SYS.ANYDATA.convertDate(t.date_val)
+            WHEN 'N' THEN SYS.ANYDATA.convertNumber(t.number_val)
+            ELSE SYS.ANYDATA.convertVarchar2(NULL) -- must have a placeholder for collect
+        END AS ad
+    FROM this_ctx_cols t
+    PARTITION BY (t.row_nr) -- fill gaps for empty cells
+    RIGHT OUTER JOIN cols
+        ON cols.col_nr = t.col_nr
+)
+, ad_arr AS (
+    SELECT row_nr - 1 AS data_row_nr
+        ,CAST( COLLECT(ad ORDER BY col_nr) AS arr_anydata_udt) AS vaa
+    FROM ad_cols
+    GROUP BY row_nr
+) 
+SELECT app_read_xlsx_row_udt(data_row_nr, vaa)
+FROM ad_arr
+--ORDER BY data_row_nr
+        ;
+
+    BEGIN
+        OPEN c_filled_gaps;
+        LOOP
+            FETCH c_filled_gaps BULK COLLECT INTO v_arr LIMIT 100;
+            EXIT WHEN v_arr.COUNT = 0;
+            FOR i IN 1..v_arr.COUNT
+            LOOP
+                PIPE ROW(v_arr(i));
+            END LOOP;
+        END LOOP;
+        CLOSE c_filled_gaps;
+        RETURN;
+    END get_data_rows
+    ;
 
 END;
 /

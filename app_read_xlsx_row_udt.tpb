@@ -3,7 +3,7 @@ CREATE OR REPLACE TYPE BODY app_read_xlsx_row_udt AS
     RETURN SYS.anydata
     AS
     BEGIN
-        RETURN aad(p_i).ad;
+        RETURN aa(p_i);
     END get;
 END;
 /

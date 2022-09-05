@@ -1,5 +1,11 @@
-spool install.log
 set serveroutput on
+whenever sqlerror continue
+prompt clean up prior iteration code. May fail
+DROP type arr_anydata_shell_udt FORCE;
+DROP type anydata_shell_udt FORCE;
+prompt ---------------------------------------------------------------------
+prompt ignore failures above
+prompt ---------------------------------------------------------------------
 whenever sqlerror exit failure
 --
 -- for conditional compilation based on sqlplus define settings.
@@ -20,18 +26,18 @@ SELECT DECODE('&&compile_arr_varchar2_udt','TRUE','arr_varchar2_udt.tps', 'do_no
 prompt calling &&do_file
 @@&&do_file
 --
-prompt compile anydata_shell_udt
-@@anydata_shell_udt.tps
-GRANT EXECUTE ON anydata_shell_udt TO &&GRANT_LIST ;
+prompt compile arr_anydata_udt.tps
+@@arr_anydata_udt.tps
+GRANT EXECUTE ON arr_anydata_udt TO &&GRANT_LIST ;
 --
-prompt compile arr_anydata_shell_udt
-@@arr_anydata_shell_udt.tps
-GRANT EXECUTE ON arr_anydata_shell_udt TO &&GRANT_LIST ;
---
-prompt compile app_read_xlsx_row_udt
+prompt compile app_read_xlsx_row_udt.tps
 @@app_read_xlsx_row_udt.tps
+prompt compile app_read_xlsx_row_udt.tpb
 @@app_read_xlsx_row_udt.tpb
 GRANT EXECUTE ON app_read_xlsx_row_udt TO &&GRANT_LIST ;
+prompt compile arr_app_read_xlsx_row_udt.tps
+@@arr_app_read_xlsx_row_udt.tps
+GRANT EXECUTE ON arr_app_read_xlsx_row_udt TO &&GRANT_LIST ;
 --
 prompt create global temporary table as_read_xlsx_gtt
 @@as_read_xlsx_gtt.sql
