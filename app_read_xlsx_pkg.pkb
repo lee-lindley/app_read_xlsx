@@ -10,10 +10,10 @@ AS
     BEGIN
         -- we do not try to reuse gaps
         v_ctx := g_ctx_cache(g_ctx_cache.LAST);
-        IF v_ctx IS NULL THEN
+        IF g_ctx_cache.LAST IS NULL THEN
             v_ctx := 1;
         ELSE
-            v_ctx := v_ctx + 1;
+            v_ctx := g_ctx_cache(g_ctx_cache.LAST) + 1;
         END IF;
         g_ctx_cache(v_ctx) := v_ctx;
         RETURN v_ctx;
