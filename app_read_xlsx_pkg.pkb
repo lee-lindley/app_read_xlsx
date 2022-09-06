@@ -6,8 +6,15 @@ AS
     FUNCTION create_ctx RETURN NUMBER
     IS
         v_ctx   NUMBER(10);
+        v_cnt   BINARY_INTEGER;
     BEGIN
-        v_ctx := g_ctx_cache.COUNT + 1;
+        -- we do not try to reuse gaps
+        v_ctx := g_ctx_cache(g_ctx_cache.LAST);
+        IF v_ctx IS NULL THEN
+            v_ctx := 1;
+        ELSE
+            v_ctx := v_ctx + 1;
+        END IF;
         g_ctx_cache(v_ctx) := v_ctx;
         RETURN v_ctx;
     END create_ctx

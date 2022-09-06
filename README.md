@@ -30,7 +30,7 @@ archive.
 The file *install.sql* has a few define values you may what to change:
 
 - *GRANT_LIST* - The required set of grants are provided to schemas in this string. It can be multiple schemas comma separated. The default is **PUBLIC**.
-- *d_arr_varchar2_udt* - The name to use for a User Defined Type defined as a TABLE OF VARCHAR2(4000). You may already have one.
+- *d_arr_varchar2_udt* - The name to use for a User Defined Type defined as a TABLE OF VARCHAR2(4000). You may already have one. The default name is *arr_varchar2_udt*.
 - *compile_arr_varchar2_udt* - The default of **TRUE** means we will create the type named by *d_arr_varcahr2_udt*. **FALSE** indicates you already have one and do not want to create or replace it.
 
 Once you complete any changes to *install.sql*, run it with sqlplus:
@@ -43,7 +43,7 @@ The script runners in Toad or SqlDeveloper should also work just fine, but I did
 
 | ![Spreadsheet Input Use Case](images/spreadsheet_input_use_case.gif) |
 |:--:|
-| app_csv_udt Use Case Diagram |
+| app_read_xlsx_udt Use Case Diagram |
 
 Premise: Spreadsheet users do naughty things like put strings in the middle of date columns. A string like 'N/A' will invalidate
 an assumption that the column contains either a valid date or NULL in all rows. You can convert everything to strings,
@@ -140,10 +140,11 @@ END;
 ## app_read_xlsx_udt constructor
 
 Creates the object from the provided spreadsheet as a BLOB. The other two arguments are for *as_read_xlsx*. You will
-generally provide the number for a sheet you want to read as a string. Although *as_read_xlsx* supports reading
+generally provide the ordinal number for a sheet you want to read as a string. Although *as_read_xlsx* supports reading
 more than one sheet, *app_read_xlsx_udt* does not.
 
-Data from the spreadsheet is stored in a global temporary table named *as_read_xlsx_gtt*.
+Data from the spreadsheet is stored in a global temporary table named *as_read_xlsx_gtt* for the life of the session
+(unless *destructor* method is called).
 
 ```sql
     CONSTRUCTOR FUNCTION app_read_xlsx_udt(
@@ -159,7 +160,7 @@ Returns a string containing a SQL SELECT statement the columns of which have the
 the first row of the input spreadsheet. The column values are type **ANYDATA**. 
 
 ```sql
-    MEMBER FUNCTION get_sql(p_oname VARCHAR2 := 'X.R') RETURN CLOB
+    MEMBER FUNCTION get_sql RETURN CLOB
 ```
 
 ## get_col_names
@@ -170,7 +171,7 @@ to construct dynamic sql, you should protect them with double quotes. This list 
 *data_row_nr* that is added to the resultset provided by *get_sql*.
 
 ```sql
-    MEMBER FUNCTION get_col_names RETURN &&d_arr_varchar2_udt.
+    MEMBER FUNCTION get_col_names RETURN arr_varchar2_udt
 ```
 
 ## get_col_count
@@ -211,18 +212,38 @@ part of mainstream usage.
 ## get_data_rows
 
 A pipelined table function that returns object type rows including a collection of **ANYDATA** values.
-It provides the conversion of data into rows, densifies the missing pieces for empty cells, and allows
+It provides the pivot of data into rows, densifies the missing pieces for empty cells, and allows
 the selection of individual elements of the collection via a *get* method and an index. This is how *get_sql*
-is able to provide SQL to extract individual column **ANYDATA** elements and provide names from the input spreadsheet.
+is able to provide dynamic SQL to extract individual column **ANYDATA** elements 
+and provide column names from the input spreadsheet.
 
+Alternatives were considered.
 Polymorphic Table Functions do not support object types and the **ANYDATASET** design pattern is complex. We could
 build an **ANYDATASET** implementation (see *ExcelTable.getRows* in [ExcelTable](https://github.com/mbleron/ExcelTable)),
 but the number of people with the skill and willingness to support it is limited. I did not feel comfortable
-leaving my current employer with that liability.
+encumbering my current employer with that liability. This method uses a resultset footprint that is known at compile
+time, then object methods to build a column list in dynamic SQL at run time. It is still a bit complicated, but
+should be in the wheelhouse of most journeyman Oracle developers.
 
 ```sql
     STATIC FUNCTION get_data_rows(
          p_ctx      NUMBER
         ,p_col_cnt  NUMBER
     ) RETURN arr_app_read_xlsx_row_udt PIPELINED
+```
+
+## destructor
+
+PL/SQL objects do not automatically call a destructor method. Shame.
+
+This method deletes rows from *as_read_xlsx_gtt* for this spreadsheet as identified by the context number. Removes
+the context number from the collection maintained in a session level package global variable.
+
+If you have a long running session that handles multiple spreadsheet inputs, this provides a way to
+keep the memory and temporary table sizes from growing unbounded. You can also call it if you are a neat freak.
+For most use cases a session will exist only long enough to process one or a few spreadsheets then exit, thus
+automatically freeing the memory and space. You may never need this method.
+
+```sql
+    MEMBER PROCEDURE destructor
 ```

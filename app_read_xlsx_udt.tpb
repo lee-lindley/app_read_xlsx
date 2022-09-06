@@ -136,9 +136,7 @@ SOFTWARE.
     -- The rest of the columns are named as the column headers in the input
     -- spreadsheet with case preserved. Newlines in headers will likely blow it up.
     --
-    MEMBER FUNCTION get_sql(
-        p_oname VARCHAR2 := 'X.R'
-    )
+    MEMBER FUNCTION get_sql
     RETURN CLOB
     IS
         v_sql           CLOB ;
@@ -146,11 +144,17 @@ SOFTWARE.
         -- since this is dynamic sql that will be executed by a procedure
         -- that can be in another schema, and we have not created synonyms,
         -- fully qualify the name of the function
-        v_sql := 'SELECT '||p_oname||'.data_row_nr AS data_row_nr, 
-'
-            || SELF.get_col_sql(p_oname)||'
+        v_sql := q'{SELECT X.R.data_row_nr AS data_row_nr, 
+}'
+            --
+            -- The use of VALUE() function is to get the full object from the pipelined table
+            -- function. By default you get the object members as columns. We want the object
+            -- that includes the anydata collection because the object has the get() method we
+            -- use to extract individual elements from the collection.
+            --
+            || SELF.get_col_sql('X.R')||'
   FROM (
-    SELECT VALUE(t) AS R
+    SELECT VALUE(t) AS R -- full object, not the object members * would provide
     FROM TABLE('||$$PLSQL_UNIT_OWNER||'.app_read_xlsx_udt.get_data_rows('
             ||TO_CHAR(SELF.ctx)
             ||','||TO_CHAR(SELF.get_col_count)

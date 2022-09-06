@@ -59,7 +59,7 @@ SOFTWARE.
         ,p_sheets   VARCHAR2 := NULL
         ,p_cell     VARCHAR2 := NULL
     ) RETURN SELF AS RESULT
-    ,MEMBER FUNCTION get_sql(p_oname VARCHAR2 := 'X.R') RETURN CLOB
+    ,MEMBER FUNCTION get_sql RETURN CLOB
     -- these two functions do not include data_row_nr in list or count
     ,MEMBER FUNCTION get_col_names RETURN &&d_arr_varchar2_udt.
     ,MEMBER FUNCTION get_col_count RETURN NUMBER 
