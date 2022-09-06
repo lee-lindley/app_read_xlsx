@@ -9,7 +9,6 @@ AS
         v_cnt   BINARY_INTEGER;
     BEGIN
         -- we do not try to reuse gaps
-        v_ctx := g_ctx_cache(g_ctx_cache.LAST);
         IF g_ctx_cache.LAST IS NULL THEN
             v_ctx := 1;
         ELSE
