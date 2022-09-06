@@ -1,11 +1,4 @@
 set serveroutput on
-whenever sqlerror continue
-prompt clean up prior iteration code. May fail
-DROP type arr_anydata_shell_udt FORCE;
-DROP type anydata_shell_udt FORCE;
-prompt ---------------------------------------------------------------------
-prompt ignore failures above
-prompt ---------------------------------------------------------------------
 whenever sqlerror exit failure
 --
 -- for conditional compilation based on sqlplus define settings.
@@ -19,13 +12,15 @@ define GRANT_LIST="public"
 -- If you already have collection type named the way you like, define that name here
 --
 define d_arr_varchar2_udt="arr_varchar2_udt"
--- Set these to FALSE if you do not need to compile them
+-----------------------------------------------------------------------------------
+-- Set this to FALSE if you do not need to compile this type. Or you could just comment outt this section
+-- of the install.sql file
 define compile_arr_varchar2_udt="TRUE"
 
 SELECT DECODE('&&compile_arr_varchar2_udt','TRUE','arr_varchar2_udt.tps', 'do_nothing.sql arr_varchar2_udt') AS file_choice FROM dual;
 prompt calling &&do_file
 @@&&do_file
---
+-----------------------------------------------------------------------------------
 prompt compile arr_anydata_udt.tps
 @@arr_anydata_udt.tps
 GRANT EXECUTE ON arr_anydata_udt TO &&GRANT_LIST ;
@@ -35,6 +30,7 @@ prompt compile app_read_xlsx_row_udt.tps
 prompt compile app_read_xlsx_row_udt.tpb
 @@app_read_xlsx_row_udt.tpb
 GRANT EXECUTE ON app_read_xlsx_row_udt TO &&GRANT_LIST ;
+--
 prompt compile arr_app_read_xlsx_row_udt.tps
 @@arr_app_read_xlsx_row_udt.tps
 GRANT EXECUTE ON arr_app_read_xlsx_row_udt TO &&GRANT_LIST ;

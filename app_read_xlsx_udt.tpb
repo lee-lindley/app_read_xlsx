@@ -93,6 +93,13 @@ AS
     END get_ctx
     ;
 
+    MEMBER FUNCTION get_sheet_name RETURN VARCHAR2
+    IS
+    BEGIN
+        RETURN sheet_name;
+    END get_sheet_name
+    ;
+
     -- you can use this in a dynamic sql statement. It can become a WITH clause
     -- that you join to as needed. 
     --

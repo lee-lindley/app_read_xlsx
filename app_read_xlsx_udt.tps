@@ -1,5 +1,4 @@
 CREATE OR REPLACE TYPE app_read_xlsx_udt FORCE AS OBJECT (
-
     -- example:
 --declare
 --    v_o app_read_xlsx_udt;
@@ -45,6 +44,7 @@ CREATE OR REPLACE TYPE app_read_xlsx_udt FORCE AS OBJECT (
     ) RETURN SELF AS RESULT
     ,MEMBER PROCEDURE destructor -- clears context and global temporary table records for this spreadsheet instance
     ,MEMBER FUNCTION get_ctx RETURN NUMBER
+    ,MEMBER FUNCTION get_sheet_name RETURN VARCHAR2
     ,MEMBER FUNCTION get_col_sql(p_oname VARCHAR2 := 'X.R') RETURN CLOB
     -- used from the dynamic SQL returned to you by get_sql()
     ,STATIC FUNCTION get_data_rows(
