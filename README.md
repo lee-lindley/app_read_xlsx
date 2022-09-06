@@ -135,6 +135,18 @@ END;
 |:--:|
 | test_salaries_output spreadsheet|
 
+Of note is that we did not need to know very much about the input spreadsheet. We needed to know which
+sheet (ordinal position) to read and the name of the column that contained the *employee number*. We did
+not absolutely require knowledge of anything else in that spreadsheet and the users could change or
+add columns without impacting this code.
+
+The one exception is that we need to know which columns are primarily date columns. The reason is that Excel
+treats dates and numbers the same. A date is just a number until formatting is applied. If we do not tell
+Oracle that a column is mostly date values, it will display a number in the date column. If we know which columns
+are dates, we can tell *ExcelGen* to format the column as a date. Likewise if we know certain columns are primarily
+numbers and should be formatted a certain way, we can use that knowledge of the input spreadsheet to make the
+output look nicer, but none of that is required.
+
 # Manual Page
 
 ## app_read_xlsx_udt constructor
