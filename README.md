@@ -142,7 +142,7 @@ add columns without impacting this code.
 
 The one exception is that we need to know which columns are primarily date columns. The reason is that Excel
 treats dates and numbers the same. A date is just a number until formatting is applied. If we do not tell
-Oracle that a column is mostly date values, it will display a number in the date column. If we know which columns
+Excel that a column is mostly date values, it will display a number in the date column. If we know which columns
 are dates, we can tell *ExcelGen* to format the column as a date. Likewise if we know certain columns are primarily
 numbers and should be formatted a certain way, we can use that knowledge of the input spreadsheet to make the
 output look nicer, but none of that is required.
