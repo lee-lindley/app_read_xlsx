@@ -1,6 +1,6 @@
 # app_read_xlsx - An Oracle Object Type and Package for reading an XLSX worksheet
 
-Anton Scheffer's *as_read_xlsx* is the goto tool for reading an Excel spreadsheet in PL/SQL.
+Anton Scheffer's *as_read_xlsx* is the go-to tool for reading an Excel spreadsheet in PL/SQL.
 *app_read_xlsx* extends *as_read_xlsx* providing a SQL
 statement that presents the spreadsheet data as **ANYDATA** values with SQL column names
 matching the column headers from the first row.
@@ -12,7 +12,7 @@ if you want to verify. The only change I made was to set invoker rights via an *
 A slight tweak to Marc Bleron's [ExcelGen](https://github.com/mbleron/ExcelGen) supports **ANYDATA** type columns
 in the input cursor such that you can copy data, even messy data with varying data types within columns, from one spreadsheet
 to another. That tweak lives in [a fork of ExcelGen](https://github.com/lee-lindley/ExcelGen/tree/anydata) at the moment.
-Marc is refactoring *ExcelGen* so the pull request will not be accepted; however, we have a soft committment to consider support 
+Marc is refactoring *ExcelGen* so the pull request will not be accepted; however, we have a soft commitment to consider support 
 of **ANYDATA** columns in the future.
 
 # Content
@@ -20,6 +20,7 @@ of **ANYDATA** columns in the future.
 - [Installation](#installation)
 - [Use Case](#use-case)
 - [Examples](#examples)
+- [How it Works](#how-it-works)
 - [Manual Page](#manual-page)
 
 # Installation
@@ -49,9 +50,13 @@ Premise: Spreadsheet users do naughty things like put strings in the middle of d
 an assumption that the column contains either a valid date or NULL in all rows. You can convert everything to strings,
 but when you load back into another spreadsheet, that is less than desirable.
 
-The primary use case for creation of this tool is to ingest messy spreadsheet data, use the less messy parts
+The primary use case for this tool is to ingest messy spreadsheet data, use the less messy parts
 to join to other database tables to gather additional information, then faithfully reproduce the original
 spreadsheet data in an output spreadsheet while adding one or more columns of supplemental data.
+
+*app_read_xlsx* provides for ingesting the data. Outputting a new spreadsheet requires an XLSX generator
+such as [ExcelGen](https://github.com/mbleron/ExcelGen)
+(or temporarily while ExcelGen is being refactored, [ExcelGen Fork](https://github.com/lee-lindley/ExcelGen/tree/anydata)).
 
 # Examples
 
@@ -68,6 +73,15 @@ BEGIN
     DBMS_OUTPUT.put_line(v_o.get_sql);
 END;
 /
+-- resulting output:
+SELECT X.R.data_row_nr AS data_row_nr,
+   X.R.get(1) AS "id"
+    ,X.R.get(2) AS "data"
+    ,X.R.get(3) AS "ddata"
+  FROM (
+    SELECT VALUE(t) AS R -- full object, not the object members * would provide
+    FROM TABLE(LEE.app_read_xlsx_udt.get_data_rows(1,3)) t
+  ) X
 ```
 
 The second example will input a spreadsheet as pictured here. You can find the xlsx input and output files
@@ -146,6 +160,105 @@ Excel that a column is mostly date values, it will display a number in the date 
 are dates, we can tell *ExcelGen* to format the column as a date. Likewise if we know certain columns are primarily
 numbers and should be formatted a certain way, we can use that knowledge of the input spreadsheet to make the
 output look nicer, but none of that is required.
+
+# How it Works
+
+## Overview
+
+- The input datastream from *as_read_xlsx* is a table of cell data. The ordinal row and column numbers of the spreadsheet are columns/attributes in this data stream. 
+- Empty cells are not present in the data. 
+- The concept of column headers and database identifiers for the columns is not present in this structure.
+- Each cell is represented with a polymorphic structure containing a *cell_type* attribute and a value in one of the attributes *string_val*, *number_val*, *date_val*, *formula*. *formula* is out of scope for this implementation. Our design pattern converts this polymorphic structure into an Oracle **ANYDATA** object type.
+
+Presenting the cell data in a two dimensional standard database pattern requires
+
+- pivot spreadsheet columns into rows
+- extract column identifiers and number of columns from the first row of the input data
+- densify the missing/empty cells
+- convert multi-attribute polymorphic cell representation into **ANYDATA** objects
+- present the **ANYDATA** cell objects in standard database TABLE structure with rows and columns named from the spreadsheet column headers
+
+Doing this requires a runtime determination of the resultset type. It is not difficult to do this for a PL/SQL cursor
+as we can use a weakly typed SYS_REFCURSOR. It is much harder to present the results to the SQL engine in a way
+that the resultset may be joined and extended.
+
+## Considerations
+
+When one hears the term **polymorphic resultset**, we instantly turn to the cool new Oracle toy (well, new as of Oracle 18c)
+of **Polymorphic Table Functions**. Unfortunately, this design pattern only supports standard Oracle datatypes. Object
+types such as **ANYDATA** are not supported, at least as of Oracle 19c.
+
+Another method for achieving this is the **ANYDATASET** technique which is built with **ANYTYPE**. Building these requires
+producing ODCI level code, whether in PL/SQL or another compiled language such as Java or C. Although this pattern
+can be followed reasonably well at a cookbook level for standard data types with a moderate level of study, 
+extending it to handle piece-wise construction of complex object types such as the **ANYDATA** objects is non-trivial.
+(see *ExcelTable.getRows* in [ExcelTable](https://github.com/mbleron/ExcelTable) for an example of using **ANYDATA**
+with standard datatypes.)
+This is a level of complexity the author has seldom observed within most corporate IT departments. If there were
+community support of this I would be willing, but for this project it exceeds the complexity level with which I'm comfortable
+encumbering my current employer.
+
+The level of complexity I settled on was using a compile time known object type representing a row,
+and standard pipelined table function returning a collection of that row object type. This is a well known
+and documented technique that should be in the wheelhouse of most journeyman level Oracle practitioners.
+The only slightly tricky part I added was the use of a nested table collection inside this object
+and an object method named **get** for extracting members of that nested table in a SQL statement.
+
+## Technique
+
+We start with a collection object type of **ANYDATA** objects.
+
+```sql
+CREATE OR REPLACE TYPE arr_anydata_udt FORCE AS TABLE OF sys.anydata;
+/
+```
+
+Next we build an object type that can be piped from our table function:
+
+```sql
+CREATE OR REPLACE TYPE app_read_xlsx_row_udt FORCE AS OBJECT (
+    data_row_nr NUMBER
+    ,aa         arr_anydata_udt
+    ,MEMBER FUNCTION get(p_i NUMBER) RETURN SYS.anydata
+);
+/
+```
+You can look at the type body at your leisure. The *get* method is necessary to access a member
+of the nested table collection from within SQL (inside PL/SQL you could just use aa(i)).
+
+Then to be able to define our pipelined table function we need a nested table type of these elements:
+
+```sql
+CREATE OR REPLACE TYPE arr_app_read_xlsx_row_udt FORCE AS TABLE OF app_read_xlsx_row_udt;
+/
+```
+
+Our pipelined table function (which is a static member method of our main object type *app_read_xlsx_udt*) 
+can then be declared as:
+
+```sql
+    STATIC FUNCTION get_data_rows(
+         p_ctx      NUMBER
+        ,p_col_cnt  NUMBER
+    ) RETURN arr_app_read_xlsx_row_udt PIPELINED
+```
+
+This still leaves the task of generating a SQL select list that turns the collection elements *aa.get(i)*
+into columns with an identifier based on the first row of the spreadsheet. That is done by calling the *get_sql*
+method of *app_read_xlsx_udt*. It builds a dynamic SQL statement for you that you can then use as part
+of a larger application level SQL statement as shown in the examples section and reproduced here.
+
+```sql
+SELECT X.R.data_row_nr AS data_row_nr,
+   X.R.get(1) AS "id"
+    ,X.R.get(2) AS "data"
+    ,X.R.get(3) AS "ddata"
+  FROM (
+    SELECT VALUE(t) AS R -- full object, not the object members * would provide
+    FROM TABLE(LEE.app_read_xlsx_udt.get_data_rows(1,3)) t
+  ) X
+```
+
 
 # Manual Page
 
@@ -228,14 +341,6 @@ It provides the pivot of data into rows, densifies the missing pieces for empty 
 the selection of individual elements of the collection via a *get* method and an index. This is how *get_sql*
 is able to provide dynamic SQL to extract individual column **ANYDATA** elements 
 and provide column names from the input spreadsheet.
-
-Alternatives were considered.
-Polymorphic Table Functions do not support object types and the **ANYDATASET** design pattern is complex. We could
-build an **ANYDATASET** implementation (see *ExcelTable.getRows* in [ExcelTable](https://github.com/mbleron/ExcelTable)),
-but the number of people with the skill and willingness to support it is limited. I did not feel comfortable
-encumbering my current employer with that liability. This method uses a resultset footprint that is known at compile
-time, then object methods to build a column list in dynamic SQL at run time. It is still a bit complicated, but
-should be in the wheelhouse of most journeyman Oracle developers.
 
 ```sql
     STATIC FUNCTION get_data_rows(
