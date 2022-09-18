@@ -192,7 +192,7 @@ Another method for achieving this is the **ANYDATASET** technique which is built
 producing ODCI level code, whether in PL/SQL or another compiled language such as Java or C. Although this pattern
 can be followed reasonably well at a cookbook level for standard data types with a moderate level of study, 
 extending it to handle piece-wise construction of complex object types such as the **ANYDATA** objects is non-trivial.
-(see *ExcelTable.getRows* in [ExcelTable](https://github.com/mbleron/ExcelTable) for an example of using **ANYDATA**
+(see *ExcelTable.getRows* in [ExcelTable](https://github.com/mbleron/ExcelTable) for an example of using **ANYDATASET**
 with standard datatypes.)
 This is a level of complexity the author has seldom observed within most corporate IT departments. If there were
 community support of this I would be willing, but for this project it exceeds the complexity level with which I'm comfortable
