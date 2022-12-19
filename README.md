@@ -9,11 +9,20 @@ matching the column headers from the first row.
 a link named "here" from [this page](https://technology.amis.nl/languages/oracle-plsql/read-a-excel-xlsx-with-plsql/)
 if you want to verify. The only change I made was to set invoker rights via an *AUTHID CURRENT_USER* package attribute.
 
+## ExcelGen Version 2.5
 A slight tweak to Marc Bleron's [ExcelGen](https://github.com/mbleron/ExcelGen) supports **ANYDATA** type columns
 in the input cursor such that you can copy data, even messy data with varying data types within columns, from one spreadsheet
 to another. That tweak lives in [a fork of ExcelGen](https://github.com/lee-lindley/ExcelGen/tree/anydata) at the moment.
 Marc is refactoring *ExcelGen* so the pull request will not be accepted; however, we have a soft commitment to consider support 
 of **ANYDATA** columns in the future.
+
+## ExcelGen Version 3.0
+
+[ExcelGen](https://github.com/mbleron/ExcelGen) supports **ANYDATA** type columns just fine. This means in 
+a given spreadsheet column you can place string, date and numeric values on any row and the formatting used
+will be whatever is specified for that type on that sheet. It can still get tricky if you mix numeric and date
+values in the same column depending on how you specify the column format. The reason is that a date is just
+another kind of number in Excel.
 
 # Content
 
@@ -213,7 +222,7 @@ CREATE OR REPLACE TYPE arr_anydata_udt FORCE AS TABLE OF sys.anydata;
 /
 ```
 
-Next we build an object type that can be piped from our table function:
+Next we build a container object type that can be piped from our table function:
 
 ```sql
 CREATE OR REPLACE TYPE app_read_xlsx_row_udt FORCE AS OBJECT (
