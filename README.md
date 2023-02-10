@@ -9,13 +9,6 @@ matching the column headers from the first row.
 a link named "here" from [this page](https://technology.amis.nl/languages/oracle-plsql/read-a-excel-xlsx-with-plsql/)
 if you want to verify. The only change I made was to set invoker rights via an *AUTHID CURRENT_USER* package attribute.
 
-## ExcelGen Version 2.5
-A slight tweak to Marc Bleron's [ExcelGen](https://github.com/mbleron/ExcelGen) supports **ANYDATA** type columns
-in the input cursor such that you can copy data, even messy data with varying data types within columns, from one spreadsheet
-to another. That tweak lives in [a fork of ExcelGen](https://github.com/lee-lindley/ExcelGen/tree/anydata) at the moment.
-Marc is refactoring *ExcelGen* so the pull request will not be accepted; however, we have a soft commitment to consider support 
-of **ANYDATA** columns in the future.
-
 ## ExcelGen Version 3.0
 
 [ExcelGen](https://github.com/mbleron/ExcelGen) supports **ANYDATA** type columns just fine. This means in 
@@ -64,8 +57,7 @@ to join to other database tables to gather additional information, then faithful
 spreadsheet data in an output spreadsheet while adding one or more columns of supplemental data.
 
 *app_read_xlsx* provides for ingesting the data. Outputting a new spreadsheet requires an XLSX generator
-such as [ExcelGen](https://github.com/mbleron/ExcelGen)
-(or temporarily while ExcelGen is being refactored, [ExcelGen Fork](https://github.com/lee-lindley/ExcelGen/tree/anydata)).
+such as [ExcelGen](https://github.com/mbleron/ExcelGen).
 
 # Examples
 
@@ -159,7 +151,7 @@ END;
 | test_salaries_output spreadsheet|
 
 Of note is that we did not need to know very much about the input spreadsheet. We needed to know which
-sheet (ordinal position) to read and the name of the column that contained the *employee number*. We did
+sheet (ordinal position or sheet name) to read and the name of the column that contained the *employee number*. We did
 not absolutely require knowledge of anything else in that spreadsheet and the users could change or
 add columns without impacting this code.
 
@@ -233,7 +225,7 @@ CREATE OR REPLACE TYPE app_read_xlsx_row_udt FORCE AS OBJECT (
 /
 ```
 You can look at the type body at your leisure. The *get* method is necessary to access a member
-of the nested table collection from within SQL (inside PL/SQL you could just use aa(i)).
+of the nested table collection from within SQL ( inside PL/SQL you could just use *aa(i)* ).
 
 Then to be able to define our pipelined table function we need a nested table type of these elements:
 
@@ -274,8 +266,10 @@ SELECT X.R.data_row_nr AS data_row_nr,
 ## app_read_xlsx_udt constructor
 
 Creates the object from the provided spreadsheet as a BLOB. The other two arguments are for *as_read_xlsx*. You will
-generally provide the ordinal number for a sheet you want to read as a string. Although *as_read_xlsx* supports reading
-more than one sheet, *app_read_xlsx_udt* does not.
+generally provide the ordinal number (as a string) for a sheet you want to read,
+but the sheet name works as well.
+
+Although *as_read_xlsx* supports reading more than one sheet, *app_read_xlsx_udt* does not.
 
 Data from the spreadsheet is stored in a global temporary table named *as_read_xlsx_gtt* for the life of the session
 (unless *destructor* method is called).
@@ -362,8 +356,8 @@ and provide column names from the input spreadsheet.
 
 PL/SQL objects do not automatically call a destructor method. Shame.
 
-This method deletes rows from *as_read_xlsx_gtt* for this spreadsheet as identified by the context number. Removes
-the context number from the collection maintained in a session level package global variable.
+This method deletes rows from *as_read_xlsx_gtt* for this spreadsheet as identified by the context number. 
+Also removes the context number from the collection maintained in a session level package global variable.
 
 If you have a long running session that handles multiple spreadsheet inputs, this provides a way to
 keep the memory and temporary table sizes from growing unbounded. You can also call it if you are a neat freak.
