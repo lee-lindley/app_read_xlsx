@@ -58,15 +58,19 @@ SOFTWARE.
         ELSE
             SELF.ctx := p_ctx;
         END IF;
-        SELECT string_val BULK COLLECT INTO SELF.col_names
-        FROM as_read_xlsx_gtt t
-        WHERE t.ctx = SELF.ctx AND t.row_nr = 1
-        ORDER BY col_nr
-        ;
-        SELECT sheet_name INTO SELF.sheet_name
-        FROM as_read_xlsx_gtt t
-        WHERE t.ctx = SELF.ctx AND ROWNUM = 1
-        ;
+        BEGIN
+            SELECT sheet_name INTO SELF.sheet_name
+            FROM as_read_xlsx_gtt t
+            WHERE t.ctx = SELF.ctx AND ROWNUM = 1
+            ;
+            SELECT string_val BULK COLLECT INTO SELF.col_names
+            FROM as_read_xlsx_gtt t
+            WHERE t.ctx = SELF.ctx AND t.row_nr = 1
+            ORDER BY col_nr
+            ;
+        EXCEPTION WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20000, 'Spreadsheet did not contain data, or not for sheet specified='||NVL(p_sheets,'ALL'));
+        END;
     END app_read_xlsx_constructor
     ;
     CONSTRUCTOR FUNCTION app_read_xlsx_udt(
